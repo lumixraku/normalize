@@ -1,28 +1,33 @@
 import EntitySchema from './Entity.js';
-const flatten = (value, schema, addEntity) => {
-  if (typeof schema.getName==='undefined') {
-    return noSchemaNormalize(schema, value,flatten, addEntity);
+const flatten = (value, schema, addEntityFn) => {
+  if (!value) {
+    return 
   }
-  return schemaNormalize(schema,value,flatten, addEntity);
+  if (typeof schema.getName === 'undefined') {
+    return flattenNoSchema(schema, value, flatten, addEntityFn);
+  }
+  return flattenWithSchema(schema, value, flatten, addEntityFn);
 };
 /**
  * [如果传入的schema是一个schema的实例，那么可以执行此函数]
  * @param  {[type]} schema    [description]
  * @param  {[type]} data     [description]
  * @param  {[type]} flatten     [description]
- * @param  {[type]} addEntity [description]
+ * @param  {[type]} addEntityFn [description]
  * @return {[type]}           [description]
  */
-const schemaNormalize=(schema,data,flatten,addEntity)=>{
-  const processedEntity = {...data};
-  const currentSchema=schema;
+const flattenWithSchema = (schema, data, flatten, addEntityFn) => {
+  const processedEntityData = { ...data };
+  const currentSchema = schema;
   Object.keys(currentSchema.schema).forEach((key) => {
-      const schema = currentSchema.schema[key];
-      const temple= flatten(processedEntity[key], schema, addEntity);
-      // console.log(key,temple);
-      processedEntity[key] =temple;
+    const schema = currentSchema.schema[key];
+    const temple = flatten(processedEntityData[key], schema, addEntityFn);
+    // console.log(key,temple);
+    if (temple) {
+      processedEntityData[key] = temple;
+    }
   });
-  addEntity(currentSchema, processedEntity);
+  addEntityFn(currentSchema, processedEntityData);
   return currentSchema.getId(data);
 }
 /**
@@ -33,26 +38,26 @@ const schemaNormalize=(schema,data,flatten,addEntity)=>{
  * @param  {[type]} addEntity [description]
  * @return {[type]}           [description]
  */
-const noSchemaNormalize = (schema, data, flatten, addEntity) => {
+const flattenNoSchema = (schema, data, flatten, addEntity) => {
   //非schema实例要分别针对对象类型和数组类型做不同的处理
   const object = { ...data };
-  const arr=[];
-  let tag=schema instanceof Array;
+  const arr = [];
+  let tag = schema instanceof Array;
   Object.keys(schema).forEach((key) => {
-    if(tag){
-      const localSchema=schema[key];
-      const value=flatten(data[key],localSchema,addEntity);
-      arr.push(value);
-    }else{
+    if (tag) {
       const localSchema = schema[key];
-      const value = flatten(data[key],localSchema,addEntity);
+      const value = flatten(data[key], localSchema, addEntity);
+      arr.push(value);
+    } else {
+      const localSchema = schema[key];
+      const value = flatten(data[key], localSchema, addEntity);
       object[key] = value;
     }
   });
   //根据判别的结果，返回不同的值，可以是对象，也可以是数组
-  if(tag){
+  if (tag) {
     return arr
-  }else{
+  } else {
     return object;
   };
 };
@@ -60,19 +65,21 @@ const noSchemaNormalize = (schema, data, flatten, addEntity) => {
  * [添加属性，递归到每一个schema，不过不是schema则已原来的形式（对象属性形式直接）]
  * @param {[type]} entities [description]
  */
-const addEntities = (entities) => (schema, processedEntity) => {
-  const schemaKey = schema.getName();
-  const id = schema.getId(processedEntity);
-  if (!(schemaKey in entities)) {
-    entities[schemaKey] = {};
-  }
-  const existingEntity = entities[schemaKey][id];
-  if (existingEntity) {
-    entities[schemaKey][id] = Object.assgin(existingEntity,processedEntity);
-  } else {
-    entities[schemaKey][id] = processedEntity;
-  }
-};
+const addEntities = (entities) => {
+  return (schema, processedEntity) => {
+    const schemaKey = schema.getName();
+    const id = schema.getId(processedEntity);
+    if (!(schemaKey in entities)) {
+      entities[schemaKey] = {};
+    }
+    const existingEntity = entities[schemaKey][id];
+    if (existingEntity) {
+      entities[schemaKey][id] = Object.assgin(existingEntity, processedEntity);
+    } else {
+      entities[schemaKey][id] = processedEntity;
+    }
+  };
+}
 /**
  * [暴露给外界使用的normilize方法]
  * @param  {[type]} data  [description]
@@ -82,9 +89,9 @@ const addEntities = (entities) => (schema, processedEntity) => {
 export const normalize = (data, schema) => {
 
   const entities = {};
-  const addEntity = addEntities(entities);
+  const addEntityFn = addEntities(entities);
 
-  const result = flatten(data, schema, addEntity);
+  const result = flatten(data, schema, addEntityFn);
   return { entities, result };
 };
 //暴露出schema对象，内涵Entity的构造方法
@@ -102,11 +109,11 @@ export const schema = {
  */
 const unflattenEntity = (id, schema, unflatten, getEntity, cache) => {
   const entity = getEntity(id, schema);
-  if(!cache[schema.getName()]){
-    cache[schema.getName()]={}
+  if (!cache[schema.getName()]) {
+    cache[schema.getName()] = {}
   }
   if (!cache[schema.getName()][id]) {
-    const entityCopy =  { ...entity };
+    const entityCopy = { ...entity };
     //递归的方法，存在schema嵌套的情况下要一级接着一级的往下递归到根部
     Object.keys(schema.schema).forEach((key) => {
       if (entityCopy.hasOwnProperty(key)) {
@@ -125,24 +132,24 @@ const unflattenEntity = (id, schema, unflatten, getEntity, cache) => {
  * @param  {[type]} unflatten [description]
  * @return {[type]}           [description]
  */
-const unflattenNoEntity=(schema, input, unflatten) => {
+const unflattenNoEntity = (schema, input, unflatten) => {
   const object = { ...input };
-  const arr=[];
-  let tag=schema instanceof Array;
+  const arr = [];
+  let tag = schema instanceof Array;
   //同样的要针对数组和非数组的情况进行判别哦
   Object.keys(schema).forEach((key) => {
-    if(tag){
+    if (tag) {
       if (object[key]) {
         object[key] = unflatten(object[key], schema[key]);
       }
       arr.push(unflatten(object[key], schema[key]))
-    }else{
+    } else {
       if (object[key]) {
         object[key] = unflatten(object[key], schema[key]);
       }
     }
   });
-  if(tag){
+  if (tag) {
     return arr
   }
   return object;
@@ -153,7 +160,7 @@ const getUnflatten = (entities) => {
   const cache = {};
   const getEntity = getEntities(entities);
   return function unflatten(data, schema) {
-    if (typeof schema.getName==='undefined') {
+    if (typeof schema.getName === 'undefined') {
       return unflattenNoEntity(schema, data, unflatten);
     }
     return unflattenEntity(data, schema, unflatten, getEntity, cache);
@@ -174,4 +181,4 @@ const getEntities = (entities) => {
   };
 };
 
-export const denormalize = (result, schema, entities) => getUnflatten(entities)(result,schema);
+export const denormalize = (result, schema, entities) => getUnflatten(entities)(result, schema);

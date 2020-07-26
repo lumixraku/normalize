@@ -31,8 +31,55 @@ const article = new schema.Entity('articles', {
     result: [ comment ]
   }
 });
-const normalizedData = normalize(originalData, article)
-//还原范式化数据
-const {result,entities}=normalizedData;
-const denormalizedData=denormalize(result,article,entities);
-console.log(denormalizedData)
+// const normalizedData = normalize(originalData, article)
+// const {result,entities}=normalizedData;
+// console.log('result', result)
+// console.log('entities', entities)
+// const denormalizedData=denormalize(result,article,entities);
+// console.log(denormalizedData)
+
+
+const page = new schema.Entity('page', {})
+const book = new schema.Entity('book', {
+  pages: [page],
+  author: user
+})
+const mybook = new schema.Entity('mybook', {
+  author: user,
+  books: [book],
+  comments: {
+    result: [comment]
+  }
+}, { idAttribute: 'customizedId' })
+
+const mybookOriginalData = {
+  customizedId: '666',
+  author: { uid: '12345', name: 'uname' },
+  // books: [{
+  //   id: 'book45',
+  //   pages: [{id: 'page23'}],
+  //   author: {uid: '1111', name: 'conan'}
+  // }],
+  comments: {
+    total: 100,
+    result: [{
+      id: 'comment1',
+      commenter: {
+        uid: '999',
+        name: 'Shopee'
+      }
+    }, {
+      id: 'coment2',
+      commenter: {
+        uid: '999',
+        name: 'Shopee'
+      }
+    }]
+  }
+}
+
+
+const normalizedBookData = normalize(mybookOriginalData, mybook)
+const {result,entities}=normalizedBookData;
+console.log('result', result)
+console.log('entities', entities)
